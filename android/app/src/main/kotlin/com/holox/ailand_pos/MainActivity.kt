@@ -9,6 +9,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var barcodeScannerPlugin: BarcodeScannerPlugin? = null
+    private var externalKeyboardPlugin: ExternalKeyboardPlugin? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,14 +36,25 @@ class MainActivity : FlutterActivity() {
         // 注册 Barcode Scanner Plugin（USB条码扫描器）
         barcodeScannerPlugin = BarcodeScannerPlugin()
         flutterEngine.plugins.add(barcodeScannerPlugin!!)
+        
+        // 注册 External Keyboard Plugin（外接USB键盘）
+        externalKeyboardPlugin = ExternalKeyboardPlugin()
+        flutterEngine.plugins.add(externalKeyboardPlugin!!)
     }
     
     /**
-     * 拦截系统键盘事件，转发给条码扫描器插件
-     * 这样USB扫描器模拟的键盘输入就能被正确捕获
+     * 拦截系统键盘事件，转发给对应插件
+     * 优先级：外置键盘 > 条码扫描器 > 系统处理
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // 先尝试让条码扫描器插件处理
+        // 优先让外置键盘插件处理（测试模式时拦截）
+        externalKeyboardPlugin?.let { plugin ->
+            if (plugin.handleKeyEventDirect(event)) {
+                return true  // 事件已被键盘处理，拦截
+            }
+        }
+        
+        // 然后尝试让条码扫描器插件处理
         barcodeScannerPlugin?.let { plugin ->
             if (plugin.handleKeyEventDirect(event)) {
                 return true  // 事件已被扫描器处理，拦截
