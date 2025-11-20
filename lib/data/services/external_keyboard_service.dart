@@ -69,11 +69,8 @@ class ExternalKeyboardService extends GetxService {
       _channel.setMethodCallHandler(_handleNativeCallback);
       _addLog('✓ 已设置USB设备监听');
 
-      // 初始扫描一次USB设备
+      // 初始扫描一次USB设备（会自动请求权限）
       await scanUsbKeyboards();
-
-      // 执行全局授权（应用启动时自动授权）
-      await initGlobalAuthorization();
 
       _addLog('========== 初始化完成 ==========');
       return this;
@@ -194,14 +191,24 @@ class ExternalKeyboardService extends GetxService {
 
         detectedKeyboards.value = newDevices;
 
-        // 自动选择第一个已连接的设备
+        // 自动选择第一个设备并请求权限
         if (selectedKeyboard.value == null && newDevices.isNotEmpty) {
-          final connectedDevice =
-              newDevices.firstWhereOrNull((d) => d.isConnected);
-          if (connectedDevice != null) {
-            selectedKeyboard.value = connectedDevice;
+          final firstDevice = newDevices.first;
+          selectedKeyboard.value = firstDevice;
+          _addLog('自动选择设备: ${firstDevice.deviceName}');
+          
+          // 如果设备尚未授权，自动请求权限
+          if (!firstDevice.isConnected) {
+            _addLog('设备未授权，自动请求权限...');
+            final granted = await requestPermission(firstDevice);
+            if (granted) {
+              _addLog('✓ 权限授予成功');
+              // 重新扫描以更新设备状态
+              await Future.delayed(const Duration(milliseconds: 500));
+              await scanUsbKeyboards();
+            }
+          } else {
             keyboardStatus.value = ExternalKeyboardStatus.connected;
-            _addLog('自动选择设备: ${connectedDevice.deviceName}');
           }
         }
 
@@ -264,21 +271,34 @@ class ExternalKeyboardService extends GetxService {
   }
 
   /// 开始监听键盘输入
-  void startListening() {
+  Future<void> startListening() async {
     if (selectedKeyboard.value == null) {
       _addLog('未选择键盘设备');
       return;
     }
 
-    _addLog('开始监听键盘输入...');
-    keyboardStatus.value = ExternalKeyboardStatus.testing;
-    keyboardInputData.value = '';
+    try {
+      _addLog('开始监听键盘输入...');
+      await _channel.invokeMethod('startListening');
+      keyboardStatus.value = ExternalKeyboardStatus.testing;
+      keyboardInputData.value = '';
+      _addLog('✓ 监听已启动');
+    } catch (e) {
+      _addLog('✗ 启动监听失败: $e');
+      lastError.value = '启动监听失败: $e';
+    }
   }
 
   /// 停止监听键盘输入
-  void stopListening() {
-    _addLog('停止监听键盘输入');
-    keyboardStatus.value = ExternalKeyboardStatus.connected;
+  Future<void> stopListening() async {
+    try {
+      _addLog('停止监听键盘输入');
+      await _channel.invokeMethod('stopListening');
+      keyboardStatus.value = ExternalKeyboardStatus.connected;
+      _addLog('✓ 监听已停止');
+    } catch (e) {
+      _addLog('✗ 停止监听失败: $e');
+    }
   }
 
   /// 处理键盘输入
@@ -429,7 +449,7 @@ class ExternalKeyboardService extends GetxService {
 
   @override
   void onClose() {
-    _inputSubscription?.cancel();
+    _inputCallbacks.clear();
     super.onClose();
   }
 }

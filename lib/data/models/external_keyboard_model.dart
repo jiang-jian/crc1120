@@ -4,6 +4,8 @@ class ExternalKeyboardDevice {
   final String deviceName;
   final int vendorId;
   final int productId;
+  final String manufacturerName;
+  final String serialNumber;
   final bool isConnected;
   final DateTime? connectedAt;
 
@@ -12,6 +14,8 @@ class ExternalKeyboardDevice {
     required this.deviceName,
     required this.vendorId,
     required this.productId,
+    required this.manufacturerName,
+    required this.serialNumber,
     required this.isConnected,
     this.connectedAt,
   });
@@ -22,6 +26,8 @@ class ExternalKeyboardDevice {
       deviceName: json['deviceName'] ?? '未知设备',
       vendorId: json['vendorId'] ?? 0,
       productId: json['productId'] ?? 0,
+      manufacturerName: json['manufacturerName'] ?? 'Unknown',
+      serialNumber: json['serialNumber'] ?? 'N/A',
       isConnected: json['isConnected'] ?? false,
       connectedAt: json['connectedAt'] != null
           ? DateTime.parse(json['connectedAt'])
@@ -35,6 +41,8 @@ class ExternalKeyboardDevice {
       'deviceName': deviceName,
       'vendorId': vendorId,
       'productId': productId,
+      'manufacturerName': manufacturerName,
+      'serialNumber': serialNumber,
       'isConnected': isConnected,
       'connectedAt': connectedAt?.toIso8601String(),
     };
@@ -43,8 +51,10 @@ class ExternalKeyboardDevice {
   @override
   String toString() {
     return 'ExternalKeyboardDevice(deviceId: $deviceId, deviceName: $deviceName, '
+        'manufacturer: $manufacturerName, '
         'vendorId: 0x${vendorId.toRadixString(16).toUpperCase()}, '
         'productId: 0x${productId.toRadixString(16).toUpperCase()}, '
+        'serial: $serialNumber, '
         'isConnected: $isConnected)';
   }
 }
