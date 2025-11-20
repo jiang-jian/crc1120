@@ -2,8 +2,8 @@
 class ExternalKeyboardDevice {
   final String deviceId;
   final String deviceName;
-  final String vendorId;
-  final String productId;
+  final int vendorId;
+  final int productId;
   final bool isConnected;
   final DateTime? connectedAt;
 
@@ -20,8 +20,8 @@ class ExternalKeyboardDevice {
     return ExternalKeyboardDevice(
       deviceId: json['deviceId'] ?? '',
       deviceName: json['deviceName'] ?? '未知设备',
-      vendorId: json['vendorId'] ?? '',
-      productId: json['productId'] ?? '',
+      vendorId: json['vendorId'] ?? 0,
+      productId: json['productId'] ?? 0,
       isConnected: json['isConnected'] ?? false,
       connectedAt: json['connectedAt'] != null
           ? DateTime.parse(json['connectedAt'])
@@ -43,7 +43,9 @@ class ExternalKeyboardDevice {
   @override
   String toString() {
     return 'ExternalKeyboardDevice(deviceId: $deviceId, deviceName: $deviceName, '
-        'vendorId: $vendorId, productId: $productId, isConnected: $isConnected)';
+        'vendorId: 0x${vendorId.toRadixString(16).toUpperCase()}, '
+        'productId: 0x${productId.toRadixString(16).toUpperCase()}, '
+        'isConnected: $isConnected)';
   }
 }
 
