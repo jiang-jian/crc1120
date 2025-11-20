@@ -7,5 +7,9 @@
     <!-- USB读卡器设备过滤器 -->
     <!-- USB设备类11表示CCID (Chip Card Interface Device) -->
     <usb-device class="11" />
+    
+    <!-- USB HID键盘设备过滤器 -->
+    <!-- USB设备类3表示HID (Human Interface Device) -->
+    <usb-device class="3" />
 </resources>
 

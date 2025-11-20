@@ -143,9 +143,27 @@ class ExternalKeyboardService extends GetxService {
         break;
 
       case 'onKeyboardInput':
-        final input = call.arguments as String?;
-        if (input != null) {
-          _handleKeyboardInput(input);
+        try {
+          // 类型安全检查
+          final arguments = call.arguments;
+          if (arguments == null) {
+            _addLog('⚠ 收到空输入参数');
+            break;
+          }
+          
+          // 确保参数是字符串类型
+          if (arguments is! String) {
+            _addLog('⚠ 输入参数类型错误: ${arguments.runtimeType}');
+            break;
+          }
+          
+          _handleKeyboardInput(arguments);
+        } catch (e, stackTrace) {
+          _addLog('✗ 处理键盘输入失败: $e');
+          if (kDebugMode) {
+            print('[ExternalKeyboardService] Error: $e');
+            print(stackTrace);
+          }
         }
         break;
 
@@ -271,15 +289,19 @@ class ExternalKeyboardService extends GetxService {
   }
 
   /// 开始监听键盘输入
-  Future<void> startListening() async {
+  /// 
+  /// [intercept] 拦截模式（默认false）：
+  /// - true: 拦截所有按键，系统文本框无法输入（适合测试页面专用输入）
+  /// - false: 不拦截，只监听（推荐，系统文本框正常使用，回调同时触发）
+  Future<void> startListening({bool intercept = false}) async {
     if (selectedKeyboard.value == null) {
       _addLog('未选择键盘设备');
       return;
     }
 
     try {
-      _addLog('开始监听键盘输入...');
-      await _channel.invokeMethod('startListening');
+      _addLog('开始监听键盘输入（拦截模式: $intercept）...');
+      await _channel.invokeMethod('startListening', {'intercept': intercept});
       keyboardStatus.value = ExternalKeyboardStatus.testing;
       keyboardInputData.value = '';
       _addLog('✓ 监听已启动');
@@ -298,6 +320,21 @@ class ExternalKeyboardService extends GetxService {
       _addLog('✓ 监听已停止');
     } catch (e) {
       _addLog('✗ 停止监听失败: $e');
+    }
+  }
+
+  /// 动态设置拦截模式（监听过程中切换）
+  /// 
+  /// [intercept] 是否拦截按键：
+  /// - true: 拦截模式（系统文本框无法输入）
+  /// - false: 监听模式（系统文本框正常使用）
+  Future<void> setInterceptMode(bool intercept) async {
+    try {
+      _addLog('切换拦截模式: $intercept');
+      await _channel.invokeMethod('setInterceptMode', {'intercept': intercept});
+      _addLog('✓ 拦截模式已更新');
+    } catch (e) {
+      _addLog('✗ 切换拦截模式失败: $e');
     }
   }
 

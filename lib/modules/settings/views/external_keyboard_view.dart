@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../../../data/services/external_keyboard_service.dart';
 import '../../../data/models/external_keyboard_model.dart';
 import '../../../app/theme/app_theme.dart';
+import '../widgets/keyboard_device_list_item.dart';
 
 class ExternalKeyboardView extends StatelessWidget {
   const ExternalKeyboardView({super.key});
@@ -203,7 +204,7 @@ class ExternalKeyboardView extends StatelessWidget {
           final isSelected = selectedDevice?.deviceId == device.deviceId;
           final isHighlighted = latestDeviceId == device.deviceId;
 
-          return _buildDeviceListItem(
+          return KeyboardDeviceListItem(
             device: device,
             isSelected: isSelected,
             isHighlighted: isHighlighted,
@@ -219,116 +220,7 @@ class ExternalKeyboardView extends StatelessWidget {
     });
   }
 
-  Widget _buildDeviceListItem({
-    required ExternalKeyboardDevice device,
-    required bool isSelected,
-    required bool isHighlighted,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 12.h),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: device.isConnected ? onTap : null,
-          borderRadius: BorderRadius.circular(AppTheme.borderRadiusLarge),
-          child: Container(
-            padding: EdgeInsets.all(16.w),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppTheme.primaryColor.withOpacity(0.1)
-                  : Colors.white,
-              border: Border.all(
-                color: isSelected
-                    ? AppTheme.primaryColor
-                    : isHighlighted
-                        ? const Color(0xFFE5B544)
-                        : AppTheme.borderColor,
-                width: isSelected || isHighlighted ? 2 : 1,
-              ),
-              borderRadius: BorderRadius.circular(AppTheme.borderRadiusLarge),
-            ),
-            child: Row(
-              children: [
-                // 键盘图标
-                Container(
-                  width: 48.w,
-                  height: 48.h,
-                  decoration: BoxDecoration(
-                    color: device.isConnected
-                        ? AppTheme.primaryColor.withOpacity(0.1)
-                        : Colors.grey.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppTheme.borderRadiusDefault),
-                  ),
-                  child: Icon(
-                    Icons.keyboard,
-                    size: 24.sp,
-                    color: device.isConnected
-                        ? AppTheme.primaryColor
-                        : Colors.grey,
-                  ),
-                ),
 
-                SizedBox(width: 16.w),
-
-                // 设备信息
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        device.deviceName,
-                        style: TextStyle(
-                          fontSize: 15.sp,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: 4.h),
-                      Text(
-                        'VID: ${device.vendorId} / PID: ${device.productId}',
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          color: AppTheme.textTertiary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                SizedBox(width: 12.w),
-
-                // 连接状态
-                _buildConnectionBadge(device.isConnected),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildConnectionBadge(bool isConnected) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-      decoration: BoxDecoration(
-        color: isConnected
-            ? AppTheme.successColor.withOpacity(0.1)
-            : Colors.grey.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(AppTheme.borderRadiusDefault),
-      ),
-      child: Text(
-        isConnected ? '已连接' : '未连接',
-        style: TextStyle(
-          fontSize: 12.sp,
-          fontWeight: FontWeight.w600,
-          color: isConnected ? AppTheme.successColor : Colors.grey,
-        ),
-      ),
-    );
-  }
 
   Widget _buildDeviceStatusCard(
     ExternalKeyboardDevice device,

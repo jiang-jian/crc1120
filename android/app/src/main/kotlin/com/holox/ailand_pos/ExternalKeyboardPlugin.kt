@@ -29,6 +29,9 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
     // 是否正在监听键盘输入
     private var isListening = false
     
+    // 监听模式：true=拦截所有按键（测试模式），false=不拦截（允许系统处理）
+    private var interceptMode = false
+    
     companion object {
         private const val TAG = "ExternalKeyboard"
         private const val CHANNEL_NAME = "com.holox.ailand_pos/external_keyboard"
@@ -96,7 +99,7 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
                         intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     }
                     Log.d(TAG, "USB device attached: ${device?.deviceName}")
-                    channel.invokeMethod("onDeviceAttached", null)
+                    channel.invokeMethod("onUsbDeviceAttached", null)
                 }
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
                     val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -106,7 +109,7 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
                         intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     }
                     Log.d(TAG, "USB device detached: ${device?.deviceName}")
-                    channel.invokeMethod("onDeviceDetached", null)
+                    channel.invokeMethod("onUsbDeviceDetached", null)
                 }
             }
         }
@@ -152,8 +155,9 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
         when (call.method) {
             "scanUsbKeyboards" -> scanUsbKeyboards(result)
             "requestPermission" -> requestPermission(call, result)
-            "startListening" -> startListening(result)
+            "startListening" -> startListening(call, result)
             "stopListening" -> stopListening(result)
+            "setInterceptMode" -> setInterceptMode(call, result)
             else -> result.notImplemented()
         }
     }
@@ -203,32 +207,58 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
      * 检查设备是否为键盘
      */
     private fun isKeyboardDevice(device: UsbDevice): Boolean {
-        // 方法1：检查USB类型
+        var isHidDevice = false
+        var hasKeyboardProtocol = false
+        
+        // 方法1：检查USB HID类型和协议
         for (i in 0 until device.interfaceCount) {
             val usbInterface = device.getInterface(i)
             if (usbInterface.interfaceClass == USB_CLASS_HID) {
-                // HID设备，进一步检查协议
+                isHidDevice = true
+                
+                // 严格匹配键盘协议（排除鼠标等其他HID设备）
                 if (usbInterface.interfaceSubclass == USB_SUBCLASS_BOOT && 
                     usbInterface.interfaceProtocol == USB_PROTOCOL_KEYBOARD) {
-                    Log.d(TAG, "Device ${device.deviceName} matched by HID protocol")
+                    hasKeyboardProtocol = true
+                    Log.d(TAG, "Device ${device.deviceName} matched by strict HID keyboard protocol")
                     return true
                 }
-                // 有些键盘不严格遵循Boot协议，只要是HID就认为可能是键盘
-                Log.d(TAG, "Device ${device.deviceName} is HID device (subclass: ${usbInterface.interfaceSubclass}, protocol: ${usbInterface.interfaceProtocol})")
+                
+                // 鼠标的协议是2，明确排除
+                if (usbInterface.interfaceProtocol == 2) {
+                    Log.d(TAG, "Device ${device.deviceName} is a mouse (protocol=2), skipping")
+                    return false
+                }
             }
         }
         
-        // 方法2：检查厂商ID
-        if (device.vendorId in KNOWN_KEYBOARD_VENDORS) {
-            Log.d(TAG, "Device ${device.deviceName} matched by known vendor ID")
+        // 方法2：检查产品名称（优先级高于厂商ID）
+        val productName = device.productName?.lowercase() ?: ""
+        val manufacturerName = device.manufacturerName?.lowercase() ?: ""
+        
+        // 明确包含keyboard关键词
+        if (productName.contains("keyboard") || productName.contains("kbd") || 
+            manufacturerName.contains("keyboard")) {
+            Log.d(TAG, "Device ${device.deviceName} matched by product name: $productName")
             return true
         }
         
-        // 方法3：检查产品名称
-        val productName = device.productName?.lowercase() ?: ""
-        if (productName.contains("keyboard") || productName.contains("kbd")) {
-            Log.d(TAG, "Device ${device.deviceName} matched by product name")
+        // 排除明确是鼠标的设备
+        if (productName.contains("mouse") || productName.contains("mice") ||
+            manufacturerName.contains("mouse")) {
+            Log.d(TAG, "Device ${device.deviceName} is a mouse by name, skipping")
+            return false
+        }
+        
+        // 方法3：检查厂商ID（仅当是HID设备时才信任厂商白名单）
+        if (isHidDevice && device.vendorId in KNOWN_KEYBOARD_VENDORS) {
+            Log.d(TAG, "Device ${device.deviceName} matched by known keyboard vendor (VID: 0x${Integer.toHexString(device.vendorId)})")
             return true
+        }
+        
+        // 如果是HID设备但不符合其他条件，记录警告
+        if (isHidDevice) {
+            Log.w(TAG, "Device ${device.deviceName} is HID but doesn't match keyboard criteria (VID: 0x${Integer.toHexString(device.vendorId)}, name: $productName)")
         }
         
         return false
@@ -274,10 +304,13 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
     
     /**
      * 开始监听键盘输入
+     * @param intercept 是否拦截按键（true=拦截，false=监听但不拦截）
      */
-    private fun startListening(result: Result) {
+    private fun startListening(call: MethodCall, result: Result) {
         isListening = true
-        Log.d(TAG, "Keyboard listening started")
+        // 从参数获取拦截模式，默认为false（不拦截）
+        interceptMode = call.argument<Boolean>("intercept") ?: false
+        Log.d(TAG, "Keyboard listening started (intercept=$interceptMode)")
         result.success(true)
     }
     
@@ -286,13 +319,27 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
      */
     private fun stopListening(result: Result) {
         isListening = false
+        interceptMode = false
         Log.d(TAG, "Keyboard listening stopped")
+        result.success(true)
+    }
+    
+    /**
+     * 设置拦截模式（动态切换）
+     */
+    private fun setInterceptMode(call: MethodCall, result: Result) {
+        interceptMode = call.argument<Boolean>("intercept") ?: false
+        Log.d(TAG, "Intercept mode changed to: $interceptMode")
         result.success(true)
     }
     
     /**
      * 直接处理键盘事件（从MainActivity调用）
      * 返回true表示事件已处理，false表示需要系统继续处理
+     * 
+     * 智能拦截模式：
+     * - interceptMode=true: 拦截所有按键（测试模式，系统文本框无法输入）
+     * - interceptMode=false: 不拦截，只监听（推荐模式，系统文本框正常使用）
      */
     fun handleKeyEventDirect(event: KeyEvent): Boolean {
         // 只处理按键按下事件
@@ -300,7 +347,7 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
             return false
         }
         
-        // 如果未在监听状态，不拦截事件
+        // 如果未在监听状态，完全放行
         if (!isListening) {
             return false
         }
@@ -308,23 +355,25 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
         // 获取字符
         val char = getCharFromKeyEvent(event)
         if (char != null) {
-            // 实时发送字符到Flutter层
+            // 发送字符到Flutter层（监听器会收到通知）
             channel.invokeMethod("onKeyboardInput", char.toString())
-            Log.d(TAG, "Key captured: ${event.keyCode} -> '$char'")
-            return true  // 拦截该按键
+            Log.d(TAG, "Key captured: ${event.keyCode} -> '$char' (intercept=$interceptMode)")
+            
+            // 根据拦截模式决定是否阻止系统处理
+            return interceptMode  // true=拦截，false=放行给系统
         }
         
         // 处理特殊按键（回车、退格等）
         when (event.keyCode) {
-            KeyEvent.KEYCODE_ENTER -> {
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                 channel.invokeMethod("onKeyboardInput", "\n")
-                Log.d(TAG, "Enter key captured")
-                return true
+                Log.d(TAG, "Enter key captured (intercept=$interceptMode)")
+                return interceptMode
             }
             KeyEvent.KEYCODE_DEL -> {
-                channel.invokeMethod("onKeyboardInput", "\b")  // 退格符
-                Log.d(TAG, "Backspace key captured")
-                return true
+                channel.invokeMethod("onKeyboardInput", "\b")
+                Log.d(TAG, "Backspace key captured (intercept=$interceptMode)")
+                return interceptMode
             }
         }
         
@@ -373,6 +422,35 @@ class ExternalKeyboardPlugin : FlutterPlugin, MethodCallHandler {
             }
             // 空格
             KeyEvent.KEYCODE_SPACE -> ' '
+            
+            // ============ 数字小键盘（Numpad）支持 ============
+            // 数字小键盘 0-9
+            KeyEvent.KEYCODE_NUMPAD_0 -> '0'
+            KeyEvent.KEYCODE_NUMPAD_1 -> '1'
+            KeyEvent.KEYCODE_NUMPAD_2 -> '2'
+            KeyEvent.KEYCODE_NUMPAD_3 -> '3'
+            KeyEvent.KEYCODE_NUMPAD_4 -> '4'
+            KeyEvent.KEYCODE_NUMPAD_5 -> '5'
+            KeyEvent.KEYCODE_NUMPAD_6 -> '6'
+            KeyEvent.KEYCODE_NUMPAD_7 -> '7'
+            KeyEvent.KEYCODE_NUMPAD_8 -> '8'
+            KeyEvent.KEYCODE_NUMPAD_9 -> '9'
+            
+            // 小键盘运算符
+            KeyEvent.KEYCODE_NUMPAD_ADD -> '+'       // 加号
+            KeyEvent.KEYCODE_NUMPAD_SUBTRACT -> '-'  // 减号
+            KeyEvent.KEYCODE_NUMPAD_MULTIPLY -> '*'  // 乘号
+            KeyEvent.KEYCODE_NUMPAD_DIVIDE -> '/'    // 除号
+            KeyEvent.KEYCODE_NUMPAD_DOT -> '.'       // 小数点
+            KeyEvent.KEYCODE_NUMPAD_COMMA -> ','     // 逗号
+            KeyEvent.KEYCODE_NUMPAD_EQUALS -> '='    // 等号
+            KeyEvent.KEYCODE_NUMPAD_LEFT_PAREN -> '(' // 左括号
+            KeyEvent.KEYCODE_NUMPAD_RIGHT_PAREN -> ')' // 右括号
+            // 注意：小键盘Enter在特殊按键中处理（KEYCODE_NUMPAD_ENTER）
+            
+            // Tab 键（常用于字段切换）
+            KeyEvent.KEYCODE_TAB -> '\t'
+            
             // 标点符号
             KeyEvent.KEYCODE_MINUS -> if (isShiftPressed) '_' else '-'
             KeyEvent.KEYCODE_EQUALS -> if (isShiftPressed) '+' else '='
