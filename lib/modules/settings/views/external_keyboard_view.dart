@@ -11,13 +11,8 @@ class ExternalKeyboardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    ExternalKeyboardService service;
-    try {
-      service = Get.find<ExternalKeyboardService>();
-    } catch (e) {
-      service = Get.put(ExternalKeyboardService());
-      service.init();
-    }
+    // 获取全局单例服务（由 main.dart 初始化）
+    final service = Get.find<ExternalKeyboardService>();
 
     return Container(
       width: double.infinity,
@@ -62,7 +57,9 @@ class ExternalKeyboardView extends StatelessWidget {
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 48.w, vertical: 40.h),
                 color: Colors.white,
-                child: _buildKeyboardTestSection(service, keyboardStatus),
+                child: SingleChildScrollView(
+                  child: _buildKeyboardTestSection(service, keyboardStatus),
+                ),
               ),
             ),
           ],
@@ -672,8 +669,8 @@ class _KeyboardInputFieldState extends State<_KeyboardInputField> {
         controller: _controller,
         focusNode: _focusNode,
         autofocus: true, // 自动聚焦
-        maxLines: null,
-        expands: true,
+        maxLines: 10,
+        minLines: 10,
         style: TextStyle(
           fontSize: 16.sp,
           color: AppTheme.textPrimary,
@@ -700,6 +697,232 @@ class _KeyboardInputFieldState extends State<_KeyboardInputField> {
           widget.service.startListening();
         },
       ),
+    );
+  }
+}
+
+/// 扩展：添加调试日志面板
+extension on _ExternalKeyboardViewState {
+  Widget _buildDebugLogPanel(ExternalKeyboardService service) {
+    return Positioned(
+      right: 0,
+      top: 80.h,
+      bottom: 100.h,
+      child: Obx(() {
+        if (!service.debugLogExpanded.value) {
+          // 收起状态：只显示展开按钮
+          return GestureDetector(
+            onTap: () => service.debugLogExpanded.value = true,
+            child: Container(
+              width: 40.w,
+              padding: EdgeInsets.symmetric(vertical: 20.h),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(AppTheme.borderRadiusLarge),
+                  bottomLeft: Radius.circular(AppTheme.borderRadiusLarge),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(-2, 0),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.chevron_left,
+                  color: const Color(0xFF4EC9B0),
+                  size: 20.sp,
+                ),
+              ),
+            ),
+          );
+        }
+
+        // 展开状态：显示完整日志面板
+        return Container(
+          width: 380.w,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(AppTheme.borderRadiusLarge),
+              bottomLeft: Radius.circular(AppTheme.borderRadiusLarge),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(-2, 0),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // 标题栏
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16.w,
+                  vertical: 12.h,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(AppTheme.borderRadiusLarge),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.terminal,
+                      size: 18.sp,
+                      color: const Color(0xFF4EC9B0),
+                    ),
+                    SizedBox(width: 8.w),
+                    Text(
+                      '键盘调试日志',
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const Spacer(),
+                    // 收起按钮
+                    InkWell(
+                      onTap: () => service.debugLogExpanded.value = false,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8.w,
+                          vertical: 4.h,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3E3E3E),
+                          borderRadius: BorderRadius.circular(4.r),
+                        ),
+                        child: Icon(
+                          Icons.chevron_right,
+                          size: 18.sp,
+                          color: const Color(0xFFCCCCCC),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    // 清空按钮
+                    InkWell(
+                      onTap: () => service.clearLogs(),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8.w,
+                          vertical: 4.h,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3E3E3E),
+                          borderRadius: BorderRadius.circular(4.r),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.clear_all,
+                              size: 14.sp,
+                              color: const Color(0xFFCCCCCC),
+                            ),
+                            SizedBox(width: 4.w),
+                            Text(
+                              '清空',
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                color: const Color(0xFFCCCCCC),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 日志内容
+              Expanded(
+                child: Obx(() {
+                  final logs = service.debugLogs;
+
+                  if (logs.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 48.sp,
+                            color: const Color(0xFF555555),
+                          ),
+                          SizedBox(height: 16.h),
+                          Text(
+                            '暂无日志',
+                            style: TextStyle(
+                              fontSize: 14.sp,
+                              color: const Color(0xFF888888),
+                            ),
+                          ),
+                          SizedBox(height: 8.h),
+                          Text(
+                            '插入USB键盘查看日志',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12.sp,
+                              color: const Color(0xFF555555),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: EdgeInsets.all(12.w),
+                    itemCount: logs.length,
+                    itemBuilder: (context, index) {
+                      final log = logs[index];
+                      final isError = log.contains('✗') ||
+                          log.contains('错误') ||
+                          log.contains('失败');
+                      final isSuccess =
+                          log.contains('✓') || log.contains('成功');
+                      final isSeparator = log.contains('=====');
+
+                      Color textColor = const Color(0xFFCCCCCC);
+                      if (isError) {
+                        textColor = const Color(0xFFF48771);
+                      } else if (isSuccess) {
+                        textColor = const Color(0xFF4EC9B0);
+                      } else if (isSeparator) {
+                        textColor = const Color(0xFF569CD6);
+                      }
+
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: 4.h),
+                        child: Text(
+                          log,
+                          style: TextStyle(
+                            fontSize: 11.sp,
+                            fontFamily: 'monospace',
+                            color: textColor,
+                            height: 1.4,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }),
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 }
