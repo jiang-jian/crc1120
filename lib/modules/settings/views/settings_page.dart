@@ -11,6 +11,7 @@ import 'version_check_view.dart';
 import 'change_password_view.dart';
 import 'placeholder_view.dart';
 import 'external_card_reader_view.dart';
+import 'external_keyboard_view.dart';
 import 'external_printer_view.dart';
 import 'qr_scanner_config_view.dart';
 import 'card_registration_view.dart';
@@ -40,6 +41,11 @@ class SettingsPage extends GetView<SettingsController> {
         key: 'external_card_reader',
         label: '读卡器',
         icon: Icons.nfc,
+      ),
+      const MenuItem(
+        key: 'external_keyboard',
+        label: '外置键盘',
+        icon: Icons.keyboard,
       ),
       const MenuItem(key: 'qr_scanner', label: '二维码扫描仪', icon: Icons.qr_code_2),
       const MenuItem(key: 'external_printer', label: '打印机', icon: Icons.print),
@@ -82,6 +88,8 @@ class SettingsPage extends GetView<SettingsController> {
     switch (selectedMenu) {
       case 'external_card_reader':
         return const ExternalCardReaderView();
+      case 'external_keyboard':
+        return const ExternalKeyboardView();
       case 'qr_scanner':
         return const QrScannerConfigView();
       case 'external_printer':

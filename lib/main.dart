@@ -4,6 +4,7 @@ import 'package:ailand_pos/data/services/sunmi_printer_service.dart';
 import 'package:ailand_pos/data/services/external_printer_service.dart';
 import 'package:ailand_pos/data/services/receipt_template_service.dart';
 import 'package:ailand_pos/data/services/barcode_scanner_service.dart';
+import 'package:ailand_pos/data/services/external_keyboard_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -59,6 +60,8 @@ Future<void> initServices() async {
   await Get.putAsync(() => BarcodeScannerService().init());
   // 预先初始化小票模板服务（全局单例）
   await Get.putAsync(() => ReceiptTemplateService().init());
+  // 预先初始化外置键盘服务（全局单例，自动授权）
+  await Get.putAsync(() => ExternalKeyboardService().init());
 }
 
 class MyApp extends StatelessWidget {
